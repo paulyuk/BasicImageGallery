@@ -32,8 +32,17 @@
     "coreimagegalleryfunctionsappName": {
       "value": "coreimagegalleryfunctionsapp"
     },
+    "linuxFxVersion": {
+      "value": "DOTNETCORE|3.0"
+    },
+    "linuxFxVersionFunctions": {
+      "value": "DOCKER|mcr.microsoft.com/azure-functions/dotnet:2.0-appservice"
+    },
+    "netFrameworkVersion": {
+      "value": "v4.0"
+    },
     "useuniquenamesuffixes": {
       "value": "Enabled"
     }
   }
-}
+  }
