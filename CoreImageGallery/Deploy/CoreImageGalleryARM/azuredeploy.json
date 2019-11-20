@@ -132,15 +132,323 @@
         "Standard_RAGRS",
         "Premium_LRS"
       ]
+    },
+    "cosmosdb-accountName": {
+			"type": "string",
+			"defaultValue": "[concat('sql-', uniqueString(resourceGroup().id))]",
+			"metadata": {
+				"description": "Cosmos DB account name, max length 44 characters"
+			}
+		},
+		"cosmosdb-primaryRegion":{
+			"type":"string",
+			"metadata": {
+				"description": "The primary replica region for the Cosmos DB account."
+			},
+      "defaultValue" : "[resourceGroup().location]"
+		},
+		"cosmosdb-secondaryRegion":{
+			"type":"string",
+			"metadata": {
+			  "description": "The secondary replica region for the Cosmos DB account."
+		  }
+		},
+		"cosmosdb-defaultConsistencyLevel": {
+			"type": "string",
+			"defaultValue": "Session",
+			"allowedValues": [ "Eventual", "ConsistentPrefix", "Session", "BoundedStaleness", "Strong" ],
+			"metadata": {
+				"description": "The default consistency level of the Cosmos DB account."
+			}
+		},
+		"cosmosdb-maxStalenessPrefix": {
+			"type": "int",
+			"minValue": 10,
+			"defaultValue": 100000,
+			"maxValue": 2147483647,
+			"metadata": {
+				"description": "Max stale requests. Required for BoundedStaleness. Valid ranges, Single Region: 10 to 1000000. Multi Region: 100000 to 1000000."
+			}
+		},
+		"cosmosdb-maxIntervalInSeconds": {
+			"type": "int",
+			"minValue": 5,
+			"defaultValue": 300,
+			"maxValue": 86400,
+			"metadata": {
+				"description": "Max lag time (minutes). Required for BoundedStaleness. Valid ranges, Single Region: 5 to 84600. Multi Region: 300 to 86400."
+			}
+		},	
+		"cosmosdb-multipleWriteLocations": {
+			"type": "bool",
+			"defaultValue": false,
+			"allowedValues": [ true, false ],
+			"metadata": {
+				"description": "Enable multi-master to make all regions writable."
+			}
+		},
+		"cosmosdb-automaticFailover": {
+			"type": "bool",
+			"defaultValue": false,
+			"allowedValues": [ true, false ],
+			"metadata": {
+				"description": "Enable automatic failover for regions. Ignored when Multi-Master is enabled"
+			}
+		},
+		"cosmosdb-databaseName": {
+			"type": "string",
+			"metadata": {
+				"description": "The name for the SQL database"
+			}
+		},
+		"cosmosdb-sharedThroughput": {
+			"type": "int",
+			"defaultValue": 400,
+			"minValue": 400,
+			"maxValue": 1000000,
+			"metadata": {
+				"description": "The throughput for the database to be shared"
+			}			
+		},
+		"cosmosdb-sharedContainer1Name": {
+			"type": "string",
+			"defaultValue": "sharedContainer1",
+			"metadata": {
+				"description": "The name for the first container with shared throughput"
+			}
+		},
+		"cosmosdb-sharedContainer2Name": {
+			"type": "string",
+			"defaultValue": "sharedContainer2",
+			"metadata": {
+				"description": "The name for the second container with shared throughput"
+			}
+		},
+		"cosmosdb-dedicatedContainer1Name": {
+			"type": "string",
+			"defaultValue": "dedicatedContainer1",
+			"metadata": {
+				"description": "The name for the container with dedicated throughput"
+			}
+		},
+		"cosmosdb-dedicatedThroughput": {
+			"type": "int",
+			"defaultValue": 400,
+			"minValue": 400,
+			"maxValue": 1000000,
+			"metadata": {
+				"description": "The throughput for the container with dedicated throughput"
+			}			
     }
   },
   "variables": {
     "coreimagegallerywebappName": "[if(equals(parameters('useuniquenamesuffixes'),'Enabled'), concat(parameters('coreimagegallerywebappName'),'-', uniqueString(resourceGroup().id)), parameters('coreimagegallerywebappName'))]",
     "coreimagegalleryfunctionsappName": "[if(equals(parameters('useuniquenamesuffixes'),'Enabled'), concat(parameters('coreimagegalleryfunctionsappName'),'-', uniqueString(resourceGroup().id)), parameters('coreimagegalleryfunctionsappName'))]",
     "coreimagegallerysqlserverName": "[if(equals(parameters('useuniquenamesuffixes'),'Enabled'), concat(parameters('coreimagegallerysqlserverName'),'-', uniqueString(resourceGroup().id)), parameters('coreimagegallerysqlserverName'))]",
-    "coreimagegallerystorageName": "[if(equals(parameters('useuniquenamesuffixes'),'Enabled'), concat(parameters('coreimagegallerystorageName'),uniqueString(resourceGroup().id)), parameters('coreimagegallerystorageName'))]"
+    "coreimagegallerystorageName": "[if(equals(parameters('useuniquenamesuffixes'),'Enabled'), concat(parameters('coreimagegallerystorageName'),uniqueString(resourceGroup().id)), parameters('coreimagegallerystorageName'))]",
+    "coreimagegallerycosmosdbName": "[if(equals(parameters('useuniquenamesuffixes'),'Enabled'), concat(parameters('cosmosdb-databaseName'),uniqueString(resourceGroup().id)), parameters('cosmosdb-databaseName'))]",	
+    "accountName": "[toLower(parameters('cosmosdb-accountName'))]",
+		"consistencyPolicy": {
+			"Eventual": {
+				"defaultConsistencyLevel": "Eventual"
+			},
+			"ConsistentPrefix": {
+				"defaultConsistencyLevel": "ConsistentPrefix"
+			},
+			"Session": {
+				"defaultConsistencyLevel": "Session"
+			},
+			"BoundedStaleness": {
+				"defaultConsistencyLevel": "BoundedStaleness",
+				"maxStalenessPrefix": "[parameters('cosmosdb-maxStalenessPrefix')]",
+				"maxIntervalInSeconds": "[parameters('cosmosdb-maxIntervalInSeconds')]"
+			},
+			"Strong": {
+				"defaultConsistencyLevel": "Strong"
+			}
+		},
+		"locations": 
+		[ 
+			{
+				"locationName": "[parameters('cosmosdb-primaryRegion')]",
+				"failoverPriority": 0,
+				"isZoneRedundant": false
+			}, 
+			{
+				"locationName": "[parameters('cosmosdb-secondaryRegion')]",
+				"failoverPriority": 1,
+				"isZoneRedundant": false
+			}
+		]
   },
   "resources": [
+    {
+			"type": "Microsoft.DocumentDB/databaseAccounts",
+			"name": "[variables('accountName')]",
+			"apiVersion": "2019-08-01",
+			"kind": "GlobalDocumentDB",
+			"location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "coreimagegallery-cosmosdb-account",
+        "[concat('hidden-link:', resourceGroup().id, '/providers/Microsoft.DocumentDB/databaseAccounts', variables('accountName'))]": "Resource"
+      },
+			"properties": {
+				"consistencyPolicy": "[variables('consistencyPolicy')[parameters('cosmosdb-defaultConsistencyLevel')]]",
+				"locations": "[variables('locations')]",
+				"databaseAccountOfferType": "Standard",
+				"enableAutomaticFailover": "[parameters('cosmosdb-automaticFailover')]",
+				"enableMultipleWriteLocations": "[parameters('cosmosdb-multipleWriteLocations')]"
+			}
+		},
+		{
+			"type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases",
+			"name": "[concat(variables('accountName'), '/', variables('coreimagegallerycosmosdbName'))]",
+			"apiVersion": "2019-08-01",
+			"dependsOn": [ "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('accountName'))]" ],
+      "tags": {
+        "displayName": "coreimagegallery-cosmosdb-sqldatabase",
+        "[concat('hidden-link:', resourceGroup().id, '/providers/Microsoft.DocumentDB/sqlDatabases', variables('accountName'), '/', variables('coreimagegallerycosmosdbName'))]": "Resource"
+      },
+			"properties":{
+				"resource":{
+					"id": "[variables('coreimagegallerycosmosdbName')]"
+				},
+				"options": { "throughput": "[parameters('cosmosdb-sharedThroughput')]" }
+			}
+		},
+		{
+			"type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
+			"name": "[concat(variables('accountName'), '/', variables('coreimagegallerycosmosdbName'), '/', parameters('cosmosdb-sharedContainer1Name'))]",
+			"apiVersion": "2019-08-01",
+			"dependsOn": [ "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', variables('accountName'), variables('coreimagegallerycosmosdbName'))]" ],
+			"tags": {
+        "displayName": "coreimagegallery-cosmosdb-container1",
+        "[concat('hidden-link:', resourceGroup().id, '/providers/Microsoft.DocumentDB/sqlDatabases/containers', variables('accountName'), '/', variables('coreimagegallerycosmosdbName'), '/', parameters('cosmosdb-sharedContainer1Name'))]": "Resource"
+      },
+      "properties":
+			{
+				"resource":{
+					"id":  "[parameters('cosmosdb-sharedContainer1Name')]",
+					"partitionKey": {
+						"paths": [
+						"/myPartitionKey"
+						],
+						"kind": "Hash"
+					},
+					"indexingPolicy": {
+						"indexingMode": "consistent",
+						"includedPaths": [{
+								"path": "/*"
+							}
+						],
+						"excludedPaths": [{
+								"path": "/myPathToNotIndex/*"
+							}
+						]
+					}
+				}
+			}
+		},
+		{
+			"type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
+			"name": "[concat(variables('accountName'), '/', variables('coreimagegallerycosmosdbName'), '/', parameters('cosmosdb-sharedContainer2Name'))]",
+			"apiVersion": "2019-08-01",
+			"dependsOn": [ "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', variables('accountName'), variables('coreimagegallerycosmosdbName'))]" ],
+			"tags": {
+        "displayName": "coreimagegallery-cosmosdb-container2",
+        "[concat('hidden-link:', resourceGroup().id, '/providers/Microsoft.DocumentDB/sqlDatabases/containers', variables('accountName'), '/', variables('coreimagegallerycosmosdbName'), '/', parameters('cosmosdb-sharedContainer2Name'))]": "Resource"
+      },
+      "properties":
+			{
+				"resource":{
+					"id":  "[parameters('cosmosdb-sharedContainer2Name')]",
+					"partitionKey": {
+						"paths": [
+						"/myPartitionKey"
+						],
+						"kind": "Hash"
+					},
+					"indexingPolicy": {
+						"indexingMode": "consistent",
+						"includedPaths": [{
+								"path": "/*"
+							}
+						],
+						"excludedPaths": [{
+								"path": "/myPathToNotIndex/*"
+							}
+						]
+					}
+				}
+			}
+		},
+		{
+			"type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
+			"name": "[concat(variables('accountName'), '/', variables('coreimagegallerycosmosdbName'), '/', parameters('cosmosdb-dedicatedContainer1Name'))]",
+			"apiVersion": "2019-08-01",
+			"dependsOn": [ "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', variables('accountName'), variables('coreimagegallerycosmosdbName'))]" ],
+      "tags": {
+        "displayName": "coreimagegallery-cosmosdb-dedicatedcontainer1",
+        "[concat('hidden-link:', resourceGroup().id, '/providers/Microsoft.DocumentDB/sqlDatabases/containers', variables('accountName'), '/', variables('coreimagegallerycosmosdbName'), '/', parameters('cosmosdb-dedicatedContainer1Name'))]": "Resource"
+      },
+			"properties":
+			{
+				"resource":{
+					"id":  "[parameters('cosmosdb-dedicatedContainer1Name')]",
+					"partitionKey": {
+						"paths": [
+						"/myPartitionKey"
+						],
+						"kind": "Hash"
+					},
+					"indexingPolicy": {
+						"indexingMode": "consistent",
+						"includedPaths": [{
+								"path": "/*"
+							}
+						],
+						"excludedPaths": [{
+								"path": "/myPathToNotIndex/*"
+							}
+						],
+						"compositeIndexes":[  
+						[
+							{
+								"path":"/name",
+								"order":"ascending"
+							},
+							{
+								"path":"/age",
+								"order":"descending"
+							}
+						]
+					],
+					"spatialIndexes": [
+							{
+								"path": "/path/to/geojson/property/?",
+								"types": [
+									"Point",
+									"Polygon",
+									"MultiPolygon",
+									"LineString"
+								]
+							}
+						]
+					},
+					"defaultTtl": 86400,
+					"uniqueKeyPolicy": {
+						"uniqueKeys": [
+						{
+							"paths": [
+							"/phoneNumber"
+							]
+						}
+						]
+					}
+				},
+				"options": { "throughput": "[parameters('cosmosdb-dedicatedThroughput')]" }
+			}
+		},
     {
       "name": "[parameters('coreimagegalleryappinsightsName')]",
       "type": "Microsoft.Insights/components",
@@ -356,4 +664,4 @@
     }
   ],
   "outputs": {}
-}
+  }

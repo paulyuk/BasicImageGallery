@@ -43,6 +43,16 @@
     },
     "useuniquenamesuffixes": {
       "value": "Enabled"
+    },
+    "cosmosdb-secondaryRegion": {
+      "value": "West US 2"
+    },
+    "cosmosdb-defaultConsistencyLevel": {
+      "value": "Session"
+    },
+    "cosmosdb-databaseName": {
+      "value": "coreimagegallerycosmosdb"
     }
   }
-  }
+
+}
